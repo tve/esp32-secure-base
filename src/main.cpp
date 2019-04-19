@@ -9,6 +9,7 @@
 
 #define ASYNC
 
+#include <Arduino.h>
 #include <WiFi.h>
 #include <AsyncMqttClient.h>
 #include "lwip/apps/sntp.h"
@@ -27,7 +28,7 @@ TimerHandle_t mqttReconnectTimer; // timer to trigger reconnect when system idle
 //===== WiFi connection/reconnection
 
 void connectToWifi() {
-  printf("Connecting to Wi-Fi %s...", WIFI_SSID);
+  printf("Connecting to Wi-Fi %s...\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASSWD);
 }
 
@@ -54,6 +55,30 @@ void WiFiEvent(WiFiEvent_t event) {
   }
 }
 
+//===== OTA handling
+
+extern void startOTA(char *url, char *md5);
+
+void otaSubscribe() {
+  char topic[64] = {0};
+  snprintf(topic, 64, "%s/ota", mqttClient.getClientId());
+  printf("Subscribing to %s\n", topic);
+  mqttClient.subscribe(topic, 0);
+}
+
+void onOta(char *topic, char *payload, MqttProps properties, size_t len, size_t index, size_t total) {
+  if (!(index == 0 && len == total && len > 0 && len < 128)) return;
+  char buf[128];
+  memcpy(buf, payload, len);
+  buf[len] = 0;
+  char *md5 = strchr(buf, '|');
+  if (!md5) return;
+  *md5 = 0;
+  md5++;
+  printf("OTA message: fetch %s MD5=%s\n", buf, md5);
+  startOTA(buf, md5);
+}
+
 //===== Mqtt processing
 
 uint32_t mqttConnCnt = 0;
@@ -74,6 +99,7 @@ void onMqttConnect(bool sessionPresent) {
   printf("Subscribed at QoS 1, packetId: %d\n", packetIdSub);
 
   mqttClient.subscribe("system/offset", 0);
+  otaSubscribe();
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -104,6 +130,9 @@ void onMqttMessage(char* topic, char* payload, MqttProps properties,
 
   if (strcmp(topic, "system/offset") == 0) {
     onTimeZone(topic, payload, properties, len, index, total);
+  } else if (strncmp(topic, "esp32-", 6) == 0 && strlen(topic) > 10 &&
+      strcmp(topic+strlen(topic)-4, "/ota") == 0) {
+    onOta(topic, payload, properties, len, index, total);
   }
 }
 
@@ -168,7 +197,7 @@ void onTimeZone(char* topic, char* payload, MqttProps props, size_t len, size_t 
   }
 }
 
-//===== 
+//=====
 
 void setup() {
   digitalWrite(LED, HIGH);
