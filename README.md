@@ -1,6 +1,8 @@
 ESP32 Base Project with Secure MQTT and OTA
 ===========================================
 
+__WARNING__: this project is still work-in-progress, see the open issues
+
 This project contains a relatively simple Arduino base firmware for the ESP32 that is
 centered around MQTT and that attempts to be reasonably secure.
 It almost exclusively uses MQTTS (MQTT over TLS) for communication.
