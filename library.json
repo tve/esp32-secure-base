@@ -1,0 +1,16 @@
+{
+  "name":"ESPSecureBase",
+  "description":"Secure MQTT Base Project Libray for ESP32",
+  "keywords":"",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/tve/esp32-secure-base.git"
+  },
+  "version": "0.1.0",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "build": {
+    "libCompatMode": "strict"
+  }  
+}

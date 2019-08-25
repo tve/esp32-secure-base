@@ -1,15 +1,24 @@
 import requests
 import sys
 from os.path import basename, splitext
-from platformio import util
+#from platformio import util
 from datetime import date
 
 Import('env')
 #print env.Dump()
 
-project_config = util.load_project_config()
-ota_config = {k: v for k, v in project_config.items("mqtt_ota")}
-version = "2019-04-17" # project_config.get("common", "release_version")
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
+
+config = configparser.ConfigParser()
+config.read("platformio.ini")
+
+#value1 = config.get("my_env", "custom_option1")
+#
+#ota_config = {k: v for k, v in config.get("mqtt_ota")}
+#version = "2019-04-17" # project_config.get("common", "release_version")
 
 #
 # Push new firmware to the OTA storage
@@ -30,11 +39,14 @@ def publish_firmware(source, target, env):
     ])
     print("URL: {0}".format(url))
 
+    #print(env.Dump())
+
     headers = {
         "Content-type": "application/octet-stream",
     }
-    if ota_config["device"]:
-        headers["mqtt_device"] = ota_config["device"]
+    mqtt_device = config.get("env:"+env['PIOENV'], "mqtt_device")
+    if mqtt_device:
+        headers["mqtt_device"] = mqtt_device
 
     r = None
     try:
@@ -58,7 +70,7 @@ def publish_firmware(source, target, env):
 
 
 # Custom upload command and program name
-print env["PROJECT_DIR"]
+print(env["PROJECT_DIR"])
 env.Replace(
     PROGNAME=basename(env["PROJECT_DIR"]),
     UPLOADCMD=publish_firmware
