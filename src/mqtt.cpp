@@ -5,14 +5,13 @@
 
 // general pub-sub stuff, useful in other parts of the code as well
 AsyncMqttClient mqttClient;
-static char mqIdent[41]; // client identity, used for auth
-static char mqPsk[41];   // client pre-shared skey, used for auth
+static ESBConfig *config;
 char mqTopic[65];   // main topic prefix for pub&sub, init'd as mqIdent with sub - with /
 int mqTopicLen = 0; // strlen(mqTopic)
 
 // keep-alive stuff
 #define MQ_TIMEOUT (60*1000)    // in milliseconds
-static uint32_t mqLast = 0;     // when we last received something
+static uint32_t mqLast = 0x100000; // when we last received something
 static uint32_t mqPing = 0;     // when we last sent a ping
 
 // helper to subscribe to our own pings
@@ -61,43 +60,50 @@ void mqttSetTopic(char *topic) {
     if (mqttClient.connected()) mqttSubPing();
 }
 
-void mqttSetup(ESBConfig &config) {
+void mqttSetup(ESBConfig &c) {
+    config = &c;
     // set-up callbacks
     mqttClient.onConnect(onMqttConnect);
     mqttClient.onDisconnect(onMqttDisconnect);
     mqttClient.onMessage(onMqttMessage);
+}
+
+void mqttConnect() {
+    if (mqttClient.connected()) {
+        mqttClient.disconnect();
+        delay(100); // give LwIP some time to do something?
+    }
     // config server and security
-    uint16_t port = (uint16_t)atoi(config.mqtt_port);
-    mqttClient.setServer(config.mqtt_server, port);
+    uint16_t port = (uint16_t)atoi(config->mqtt_port);
+    mqttClient.setServer(config->mqtt_server, port);
     mqttClient.setSecure(true);
-    printf("MQTT: %s:%d %s,%s\n", config.mqtt_server, port, config.mqtt_ident, config.mqtt_psk);
-    strncpy(mqIdent, config.mqtt_ident, 40);
-    strncpy(mqPsk, config.mqtt_psk, 40);
-    mqttClient.setPsk(mqIdent, mqPsk);
+
+    char psk[5]; strncpy(psk, config->mqtt_psk, 4); psk[4] = 0;
+    printf("MQTT connecting to %s:%d (%s,%s...)\n",
+            config->mqtt_server, port, config->mqtt_ident, psk);
+    mqttClient.setPsk(config->mqtt_ident, config->mqtt_psk);
     // config base topic
     if (mqTopicLen == 0) {
         char topic[41];
-        strcpy(topic, config.mqtt_ident);
+        strcpy(topic, config->mqtt_ident);
         // replace '-' by '/'
-        for (char *dash=strchr(topic, '-'); dash; dash=strchr(dash, '-'))
-            *dash = '/';
+        for (char *dash=strchr(topic, '-'); dash; dash=strchr(dash, '-')) *dash = '/';
         mqttSetTopic(topic);
     }
+
+    mqttClient.connect();
 }
 
 void mqttLoop() {
     if (!WiFi.isConnected()) return;
     if (!mqttClient.connected()) {
         if (millis() - mqLast > 10000) {
-            printf("Connecting to MQTT\n");
-            mqttClient.disconnect();
-            mqttClient.connect();
+            mqttConnect();
             mqLast = millis();
         }
     } else if (millis() - mqLast > MQ_TIMEOUT) {
-        printf("Reconnecting to MQTT\n");
-        mqttClient.disconnect();
-        mqttClient.connect();
+        //printf("Reconnecting to MQTT\n");
+        mqttConnect();
         mqLast = millis();
     } else if (millis() - mqLast > MQ_TIMEOUT/2 && millis() - mqPing > MQ_TIMEOUT/2) {
         char topic[41+6];

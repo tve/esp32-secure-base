@@ -10,5 +10,6 @@ extern int mqTopicLen; // strlen(mqTopic)
 
 struct ESBConfig;
 extern void mqttSetup(ESBConfig &config);
+extern void mqttConnect(); // useful if config changed
 extern void mqttLoop();
 extern void mqttSetTopic(char *);
