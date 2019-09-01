@@ -158,3 +158,15 @@ bool ESBWifiConfig::reconfig(int connectTimeout, int portalTimeout) {
     //return saved;
     return false;
 }
+
+bool ESBWifiConfig::startPortal(int connectTimeout, int portalTimeout) {
+    init(connectTimeout, portalTimeout);
+
+    extern String getESP32ChipID();
+    String ap_name = "ESP-" + getESP32ChipID();
+    wifiMan.startConfigPortalModeless(ap_name.c_str(), config.ap_pass);
+}
+
+bool ESBWifiConfig::stopPortal() {
+    wifiMan.stopConfigPortal();
+}

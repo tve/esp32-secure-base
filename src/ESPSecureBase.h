@@ -118,6 +118,7 @@ public:
     void cmdErrorCB(CommandParser *cp, const char *cmd);
     void cmdWifiCB(CommandParser *cp, const char *cmd);
     void cmdMqttCB(CommandParser *cp, const char *cmd);
+    void cmdRestartCB(CommandParser *cp, const char *cmd);
     CommandParser *cmdParser;
     ESBConfig &config;
 };
