@@ -69,9 +69,19 @@ public:
     // connect blocks until either Wifi is connected or the portal times out.
     bool connect(int connectTimeout, int portalTimeout);
 
-    // reconfig starts the configuration portal and blocks until the user hits the save button
+    // reconfig starts the configuration portal and blocks 4until the user hits the save button
     // or the portalTimeout (in seconds) expires. It returns true if the values were changed.
-    bool reconfig(int connectTimeout, int portalTimeout);
+    // TODO: this has issues with crashing AsyncTCP stuff, ugh...
+    //bool reconfig(int connectTimeout, int portalTimeout);
+
+    // startPortal starts the configuration portal
+    void startPortal();
+
+    // stopPortal stops the configuration portal
+    void stopPortal();
+
+    // loop keeps the portal running (specifically: DNS server and scanning)
+    void loop() { wifiMan.loop(); }
 
 //private:
 
