@@ -1,3 +1,4 @@
 .pio
 *.log
 *-
+examples/*/lib

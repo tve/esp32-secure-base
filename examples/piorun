@@ -1,0 +1,3 @@
+#! /bin/bash -e
+rsync -ar ../../src/ lib/ESPSecureBase
+pio run "$@"
