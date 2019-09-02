@@ -4,7 +4,7 @@
 #include <ESPAsyncWiFiManager.h>
 #include "ota.h"
 #include "mqtt.h"
-#include "cli.h"
+#include "CommandParser.h"
 
 // ESBConfig manages the storage of Wifi and MQTT config parameters as well as updating the
 // respective client libs. A singleton object needs to be allocated during set-up and remain
@@ -108,41 +108,72 @@ public:
 
 class ESBCLI {
 public:
-    ESBCLI(ESBConfig &c)
-      : cmdParser(NULL)
+    ESBCLI(ESBConfig &c, CommandParser &cp)
+      : cmdParser(cp)
       , config(c)
     {}
-
-    ~ESBCLI() {
-        if (cmdParser) delete cmdParser;
-    }
 
     void init();
 
     void loop() {
         // Check if user typed something into the serial monitor
-        if (cmdParser) cmdParser->loop();
+        cmdParser.loop();
     }
 
 //private:
-    void cmdErrorCB(CommandParser *cp, const char *cmd);
-    void cmdWifiCB(CommandParser *cp, const char *cmd);
-    void cmdMqttCB(CommandParser *cp, const char *cmd);
-    void cmdRestartCB(CommandParser *cp, const char *cmd);
-    CommandParser *cmdParser;
+    void cmdErrorCB(CommandParser &cp, const char *cmd);
+    void cmdWifiCB(CommandParser &cp, const char *cmd);
+    void cmdMqttCB(CommandParser &cp, const char *cmd);
+    void cmdRestartCB(CommandParser &cp, const char *cmd);
+    CommandParser &cmdParser;
     ESBConfig &config;
 };
 
-#if 0
-// custom HTML to provide info about the custom parameters.
-AsyncWiFiManagerParameter custom_header("<h3>Configuration access point</h3>");
-AsyncWiFiManagerParameter custom_ap_pass("ap-pass", "AP password", ap_pass, 16,
-        "><span>access point password</span");
-AsyncWiFiManagerParameter custom_header2("<h3>MQTT server</h3>");
-AsyncWiFiManagerParameter custom_mqtt_server("mqtt-server", "hostname", mqtt_server, 40,
-        "><span>server hostname or IP address</span");
-AsyncWiFiManagerParameter custom_mqtt_port("mqtt-port", "port", mqtt_port, 5,
-        "><span>server port</span");
-AsyncWiFiManagerParameter custom_mqtt_psk("mqtt-psk", "pre-shared key", mqtt_psk, 40,
-        "><span>pre-shared key: 32 hex digits</span");
-#endif
+class ESBDebug {
+public:
+    ESBDebug(CommandParser &cp)
+    {
+        using namespace std::placeholders; // for the _1, _2, ...
+        cp.addCommand("debug", std::bind(&ESBDebug::debugCmdCB, this, _1, _2));
+    }
+
+//private: // private but not enforced
+
+    void debugCmdCB(CommandParser &cp, const char *cmd);
+
+    //CommandParser &_cp;
+};
+
+class ESBVar {
+public:
+    const char *_name;
+    void       *_ref;
+    ESBVar     *_next;
+    uint8_t    _size;
+
+    static ESBVar *_first;
+
+    ESBVar(const char *name, void *ref, int size)
+      : _name(name)
+      , _ref(ref)
+      , _size(size)
+    {
+        _next = _first;
+        _first = this;
+    }
+
+    static void list();
+
+    static ESBVar *find(const char *name);
+
+    uint32_t read() {
+        switch(_size) {
+        case 1: return (uint32_t)( *(uint8_t*)_ref );
+        case 2: return (uint32_t)( *(uint16_t*)_ref );
+        case 4: return (uint32_t)( *(uint32_t*)_ref );
+        default: return 0;
+        }
+    }
+};
+
+#define DV(v) static ESBVar __ ## v(#v, &v, sizeof(v))

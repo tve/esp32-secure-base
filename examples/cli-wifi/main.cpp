@@ -18,8 +18,10 @@
 
 #undef cli
 ESBConfig config;
-ESBCLI cli(config);
 ESBWifiConfig *wifiConfig; // allocated on-demand when portal is active
+CommandParser cmdP(&Serial);
+ESBCLI cli(config, cmdP);
+ESBDebug dbg(cmdP);
 
 // configuration portal timing
 
@@ -29,7 +31,7 @@ ESBWifiConfig *wifiConfig; // allocated on-demand when portal is active
 
 // MQTT message handling
 
-void onMqttMessage(char* topic, char* payload, MqttProps properties,
+static void onMqttMessage(char* topic, char* payload, MqttProps properties,
     size_t len, size_t index, size_t total)
 {
     // Handle over-the-air update messages
@@ -62,34 +64,41 @@ void setup() {
     WiFi.mode(WIFI_STA); // start getting wifi to connect
     WiFi.begin();
 
+    printf("Debug variables:\n");
+    ESBVar::list();
+
     printf("===== Setup complete\n");
 }
 
-uint32_t lastInfo = -10000;
-bool wifiConn = false;
-bool mqttConn = false;
-uint32_t mqttLast = 0;
+static uint32_t loopAt = 0;
+static uint32_t lastInfo = -10000;
+static bool wifiConn = false;
+static bool mqttConn = false;
+static uint32_t mqttLast = 0;
+DV(loopAt); DV(lastInfo); DV(wifiConn); DV(mqttConn); DV(mqttLast);
 
 // state to manage the WiFi configuration portal
-bool mqttDidConnect = false; // once MQTT connects we don't show the portal ever again
-uint32_t loopStart = 0;      // timer for the initial connection timeout
-uint32_t portalStart = 0;    // timer for the portal timeout
+static bool mqttDidConnect = false; // once MQTT connects we don't show the portal ever again
+static uint32_t loopStart = 0;      // timer for the initial connection timeout
+static uint32_t portalStart = 0;    // timer for the portal timeout
+DV(mqttDidConnect); DV(loopStart); DV(portalStart);
 
 void loop() {
     // update state
-    if (loopStart == 0) loopStart = millis();
+    loopAt = millis();
+    if (loopStart == 0) loopStart = loopAt;
     bool wc = WiFi.isConnected();
     bool mc = mqttClient.connected();
-    if (mc) mqttLast = millis();
+    if (mc) mqttLast = loopAt;
     if (mc) mqttDidConnect = true;
 
     // print wifi/mqtt info every now and then, or when it changes.
-    if (wc != wifiConn || mc != mqttConn || millis() - lastInfo > 20000) {
+    if (wc != wifiConn || mc != mqttConn || loopAt - lastInfo > 20000) {
         //WiFi.printDiag(Serial);
         printf("* Wifi:%s MQTT:%s\n",
                 wc ? WiFi.SSID().c_str() : "---",
                 mc ? config.mqtt_server : "---");
-        lastInfo = millis();
+        lastInfo = loopAt;
         wifiConn = wc;
         mqttConn = mc;
     }
@@ -97,22 +106,22 @@ void loop() {
     // Do we need to start the configuration portal?.
     // The portal is started if, after the initial boot, we don't connect to MQTT within the
     // CONF_CONN_TIMEOUT.
-    if (!mqttDidConnect && !wifiConfig && millis()-loopStart > CONF_CONN_TIMEOUT) {
+    if (!mqttDidConnect && !wifiConfig && loopAt-loopStart > CONF_CONN_TIMEOUT) {
         wifiConfig = new ESBWifiConfig(config);
         wifiConfig->startPortal();
-        portalStart = millis();
+        portalStart = loopAt;
     }
 
     // Is it time to shut down the config portal?
     // The portal is shut down unconditionally after CONF_PORTAL_TIMEOUT.
-    if (mqttConn && wifiConfig && millis()-portalStart > CONF_PORTAL_TIMEOUT) {
+    if (mqttConn && wifiConfig && loopAt-portalStart > CONF_PORTAL_TIMEOUT) {
         wifiConfig->stopPortal();
         delete wifiConfig;
         wifiConfig = 0;
     }
 
     // Do we need to reset 'cause things are just not working?
-    if (!mqttConn && millis()-mqttLast > CONF_RESET_TIMEOUT*1000) {
+    if (!mqttConn && loopAt-mqttLast > CONF_RESET_TIMEOUT*1000) {
         printf("* MQTT disconnected for a long time, resetting...\n");
         delay(50); // time for the printf
         ESP.restart();
