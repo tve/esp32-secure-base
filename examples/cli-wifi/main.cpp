@@ -61,10 +61,10 @@ void setup() {
 #endif
 
     mqttSetup(config);
+    mqttClient.onMessage(onMqttMessage);
     WiFi.mode(WIFI_STA); // start getting wifi to connect
     WiFi.begin();
 
-    printf("Debug variables:\n");
     ESBVar::list();
 
     printf("===== Setup complete\n");
