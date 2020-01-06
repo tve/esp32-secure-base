@@ -6,6 +6,9 @@
 #include <Update.h>
 #include "ota.h"
 
+#define LED_OTA 19 // ez-sbc board
+#define LED_ON   0
+
 // define static member variables - why is C++ so awful?
 long ESBOTA::contentLength;
 bool ESBOTA::isValidContentType;
@@ -24,7 +27,8 @@ void ESBOTA::begin(char *payload, size_t len) {
     char *md5 = strchr(payload, '|');
     if (!md5 || (md5-payload) >= 128) return;
     *md5++ = 0;
-    printf("OTA message: fetch %s MD5=%s\n", payload, md5);
+    char mm[33]; strncpy(mm, md5, 32); mm[32] = 0; // md5 string is not null-terminated
+    printf("OTA message: fetch %s MD5=%s\n", payload, mm);
     begin(payload, md5);
 }
 
@@ -246,12 +250,29 @@ void ESBOTA::onData(void *obj, AsyncClient *cli, void *d, size_t len) {
     }
     if (Update.isFinished()) {
         if (Update.end()) {
+#if LED_OTA
+	    pinMode(LED_OTA, OUTPUT);
+	    digitalWrite(LED_OTA, LED_ON);
+#endif
             printf("\nOTA: successful! Took %.1fs. Rebooting.\n", (millis()-start)/1000.0);
+#if LED_OTA
+	    delay(500);
+	    digitalWrite(LED_OTA, 1-LED_ON);
+#endif
             ESP.restart();
         } else {
             printf("\nOTA: error %d\n", Update.getError());
             contentLength = 0;
             cli->stop();
+#if LED_OTA
+	    pinMode(LED_OTA, OUTPUT);
+	    for (int i=0; i<10; i++) {
+		digitalWrite(LED_OTA, LED_ON);
+		delay(100);
+		digitalWrite(LED_OTA, 1-LED_ON);
+		delay(100);
+	    }
+#endif
         }
     }
 }

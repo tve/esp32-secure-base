@@ -33,17 +33,26 @@ void ESBConfig::read() {
         printf("config file size is %d\n", size);
         DynamicJsonDocument json(2*size);
         DeserializationError err = deserializeJson(json, configFile);
+        configFile.close();
         if (err) {
-            Serial.print("failed to parse config.json: ");
-            Serial.println(err.c_str());
+            printf("failed to parse config.json: %s\n", err.c_str());
+#if 1
+            File cf = SPIFFS.open("/config.json", FILE_READ);
+            printf("Contents (%d): <<", cf.size());
+            for (int ch=cf.read(); ch != -1; ch=cf.read()) {
+                if (ch >= ' ' && ch <= '~') putchar(ch); else putchar('~');
+            }
+            printf(">>\n");
+            cf.close();
+#endif
             return;
         }
 
-        strcpy(ap_pass, json["ap_pass"] |"");
-        strcpy(mqtt_server, json["mqtt_server"] |"");
-        strcpy(mqtt_port, json["mqtt_port"] |"");
-        strcpy(mqtt_ident, json["mqtt_ident"] |"");
-        strcpy(mqtt_psk, json["mqtt_psk"] |"");
+        strncpy(ap_pass, json["ap_pass"] |"", sizeof(ap_pass));
+        strncpy(mqtt_server, json["mqtt_server"] |"", sizeof(mqtt_server));
+        strncpy(mqtt_port, json["mqtt_port"] |"", sizeof(mqtt_port));
+        strncpy(mqtt_ident, json["mqtt_ident"] |"", sizeof(mqtt_ident));
+        strncpy(mqtt_psk, json["mqtt_psk"] |"", sizeof(mqtt_psk));
 
 #if 0
         strcpy(mqtt_server, "192.168.0.14");
@@ -56,6 +65,7 @@ void ESBConfig::read() {
                 mqtt_server, mqtt_port, mqtt_ident, psk, ap_pass);
 
     } else {
+    if (configFile) configFile.close();
         Serial.println("No config file, initializing mqtt ident/psk");
 
         // Construct default MQTT client id using chip MAC

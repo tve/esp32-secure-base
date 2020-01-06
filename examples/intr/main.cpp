@@ -3,6 +3,10 @@
 
 // Example application to demo Wifi and MQTT configuration using a commandline processor.
 // It also supports OTA flash updates.
+//
+// This example tests interrupts, specifically, whether calling `millis()` in an interupt handler
+// crashes OTA updates. The answer is 'yes' because it contains a 64-bit division from micros to
+// millis and that is not IRAM_ATTR. Using micros() instead works like a charm.
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -14,14 +18,27 @@
 #define LED    2
 #endif
 #define ON     1
+#define INTR  25 // interrupt pin, put pulses at ~20Hz here
 
 ESBConfig config;
 CommandParser cmdP(&Serial);
 ESBCLI cmd(config, cmdP);
 
-// MQTT message handling
+static volatile uint32_t ledAt = 0;
+#define INTR_MICROS 0
 
-uint32_t ledAt = 0;
+// Interrupt handler
+
+void IRAM_ATTR intr() {
+    digitalWrite(LED, ON);
+#if INTR_MICROS
+    ledAt = micros();
+#else
+    ledAt = millis();
+#endif
+}
+
+// MQTT message handling
 
 void onMqttMessage(char* topic, char* payload, MqttProps properties,
     size_t len, size_t index, size_t total)
@@ -33,9 +50,6 @@ void onMqttMessage(char* topic, char* payload, MqttProps properties,
     {
         ESBOTA::begin(payload, len);
     }
-
-    digitalWrite(LED, ON);
-    ledAt = millis();
 }
 
 void onMqttConnect(bool sessionPresent) {
@@ -51,12 +65,14 @@ void onMqttConnect(bool sessionPresent) {
 //===== Setup
 
 void setup() {
-
     Serial.begin(115200);
-    printf("\n===== ESP32 Secure Base Example v3 =====\n");
+    printf("\n===== ESP32 Secure Base Interrupt Example =====\n");
 
     pinMode(LED, OUTPUT);
     digitalWrite(LED, ON);
+
+    pinMode(INTR, INPUT_PULLUP);
+    attachInterrupt(INTR, intr, RISING);
 
     config.read(); // read config file from flash
     cmd.init(); // init CLI
@@ -88,10 +104,14 @@ void loop() {
     mqttLoop();
     cmd.loop();
 
-    if (ledAt != 0 && millis() - ledAt > 100) {
+#if INTR_MICROS
+    if (ledAt != 0 && micros() - ledAt > 30000) {
+#else
+    if (ledAt != 0 && millis() - ledAt > 30) {
+#endif
 	digitalWrite(LED, 1-ON);
 	ledAt = 0;
     }
 
-    delay(10);
+    //delay(10);
 }

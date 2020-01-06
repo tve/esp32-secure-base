@@ -13,6 +13,8 @@ int mqTopicLen = 0; // strlen(mqTopic)
 #define MQ_TIMEOUT (60*1000)    // in milliseconds
 static uint32_t mqLast = 0x100000; // when we last received something
 static uint32_t mqPing = 0;     // when we last sent a ping
+static uint32_t mqPingRx = 0;     // when we last received a ping response
+uint32_t mqPingMs = 0;   // timeing of last ping
 
 // helper to subscribe to our own pings
 static void mqttSubPing() {
@@ -36,14 +38,17 @@ static void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
 static void onMqttMessage(char* topic, char* payload, MqttProps properties,
     size_t len, size_t index, size_t total)
 {
-    printf("Publish received, topic=%s qos=%d dup=%d retain=%d len=%d index=%d total=%d\n",
-            topic, properties.qos, properties.dup, properties.retain, len, index, total);
+    //printf("MQTT RCV %s qos=%d dup=%d retain=%d len=%d index=%d total=%d\n",
+    //        topic, properties.qos, properties.dup, properties.retain, len, index, total);
 
     if (strlen(topic) == mqTopicLen+5 &&
             strncmp(topic, mqTopic, mqTopicLen) == 0 &&
             strcmp(topic+mqTopicLen, "/ping") == 0)
     {
         mqLast = millis();
+        mqPingRx = mqLast;
+        mqPingMs = mqLast-mqPing;
+	printf("Ping response in %ums\n", mqLast-mqPing);
     }
 }
 
@@ -66,6 +71,7 @@ void mqttSetup(ESBConfig &c) {
     mqttClient.onConnect(onMqttConnect);
     mqttClient.onDisconnect(onMqttDisconnect);
     mqttClient.onMessage(onMqttMessage);
+    mqPingRx = millis();
 }
 
 void mqttConnect() {
@@ -95,6 +101,10 @@ void mqttConnect() {
 }
 
 void mqttLoop() {
+    if (millis() - mqPingRx > 20*MQ_TIMEOUT) {
+        printf("*** No MQTT response in %d seconds - resetting\n",  (millis()-mqPingRx)/1000);
+        ESP.restart();
+    }
     if (!WiFi.isConnected()) return;
     if (!mqttClient.connected()) {
         if (millis() - mqLast > 10000) {
@@ -109,7 +119,9 @@ void mqttLoop() {
         char topic[41+6];
         strcpy(topic, mqTopic);
         strcat(topic, "/ping");
-        mqttClient.publish(topic, 0, false);
+        char payload[32];
+        int l = snprintf(payload, sizeof(payload), "%lu", millis());
+        mqttClient.publish(topic, 0, false, payload, l);
         printf("MQTT: ping sent to %s\n", topic);
         mqPing = millis();
     }

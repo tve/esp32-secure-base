@@ -5,7 +5,6 @@ from os.path import basename, splitext
 from datetime import date
 
 Import('env')
-#print env.Dump()
 
 try:
     import configparser
@@ -47,6 +46,7 @@ def publish_firmware(source, target, env):
     mqtt_device = config.get("env:"+env['PIOENV'], "mqtt_device")
     if mqtt_device:
         headers["mqtt_device"] = mqtt_device
+        print("OTA: command will be sent to {0}/ota".format(mqtt_device))
 
     r = None
     try:

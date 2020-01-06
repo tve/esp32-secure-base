@@ -1,3 +1,4 @@
 #! /bin/bash -e
+mkdir -p lib
 rsync -ar ../../src/ lib/ESPSecureBase
 pio run "$@"
